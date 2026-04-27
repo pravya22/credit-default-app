@@ -1,112 +1,92 @@
 import streamlit as st
+import pandas as pd
 import pickle
-import numpy as np
 
-# ---------------- CONFIG ----------------
-st.set_page_config(page_title="Credit Risk App", layout="centered")
+# Load model
+model = pickle.load(open("models/model.pkl", "rb"))
 
-# ---------------- STYLING ----------------
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-}
+# Page config
+st.set_page_config(page_title="Credit Risk Predictor", page_icon="💳", layout="centered")
 
-.block-container {
-    background: rgba(0,0,0,0.65);
-    padding: 2rem;
-    border-radius: 15px;
-}
+# Title
+st.title("💳 Credit Default Prediction")
+st.markdown("### AI-powered risk analysis using key financial indicators")
 
-h1, h2, h3 {
-    color: white;
-    text-align: center;
-}
+st.write("---")
 
-p {
-    color: #e0e0e0;
-}
+# Sidebar info
+st.sidebar.header("📌 About")
+st.sidebar.write("""
+This app predicts whether a customer is likely to default on a loan.
 
-.stButton>button {
-    background: linear-gradient(90deg, #00c6ff, #0072ff);
-    color: white;
-    border-radius: 10px;
-    height: 3em;
-    width: 100%;
-}
-</style>
-""", unsafe_allow_html=True)
+Model: XGBoost  
+Features used:
+- Debt Ratio  
+- Monthly Income  
+- Late Payments  
+- Credit Utilization  
+""")
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["🏠 Home", "🔮 Predictor"])
+# ---- INPUT SECTION ----
+st.subheader("📥 Enter Customer Details")
 
-# ---------------- HOME PAGE ----------------
-if page == "🏠 Home":
+col1, col2 = st.columns(2)
 
-    st.title("💳 Credit Default Risk Predictor")
+with col1:
+    debt = st.number_input("Debt Ratio", min_value=0.0, value=0.5)
+    income = st.number_input("Monthly Income", min_value=0.0, value=5000.0)
 
-    st.markdown("### About This App")
+with col2:
+    late = st.number_input("Late Payments (90 days)", min_value=0, value=0)
+    util = st.number_input("Credit Utilization", min_value=0.0, value=0.3)
 
-    st.markdown("""
-This application uses **Machine Learning (XGBoost)** to predict whether a customer is likely to default on a loan.
+# Create dataframe
+input_df = pd.DataFrame([{
+    "DebtRatio": debt,
+    "MonthlyIncome": income,
+    "NumberOfTimes90DaysLate": late,
+    "RevolvingUtilizationOfUnsecuredLines": util
+}])
 
-### 🔍 What it does:
-- Analyzes customer financial data
-- Predicts default risk
-- Helps in decision making
+st.write("---")
 
-### ⚙️ Features:
-- Clean modern UI
-- Fast predictions
-- Real-world dataset
+# ---- PREDICTION ----
+if st.button("🔍 Predict Risk"):
 
-### 🎯 Use Case:
-Banks and financial institutions can use this model to:
-- Reduce loan risk
-- Improve approval decisions
-- Detect risky customers early
-    """)
+    prediction = model.predict(input_df)[0]
+    probability = model.predict_proba(input_df)[0][1]
 
-    st.markdown("---")
-    st.info("👉 Go to Predictor from sidebar to test the model")
+    st.subheader("📊 Prediction Result")
 
-# ---------------- PREDICTOR PAGE ----------------
-elif page == "🔮 Predictor":
+    # Show result
+    if prediction == 1:
+        st.error(f"⚠️ High Risk of Default")
+    else:
+        st.success(f"✅ Low Risk")
 
-    st.title("🔮 Credit Risk Prediction")
+    st.metric(label="Default Probability", value=f"{probability:.2f}")
 
-    # Load model
-    try:
-        model = pickle.load(open("model.pkl", "rb"))
-    except:
-        st.error("⚠️ model.pkl not found. Upload it to GitHub.")
-        st.stop()
+    st.write("---")
 
-    # Inputs
-    col1, col2 = st.columns(2)
+    # ---- SIMPLE EXPLANATION ----
+    st.subheader("🧠 Key Risk Indicators")
 
-    with col1:
-        age = st.number_input("Age", 18, 100, 25)
-        income = st.number_input("Monthly Income", 0, 100000, 20000)
+    if debt > 0.6:
+        st.warning("High Debt Ratio increases risk")
 
-    with col2:
-        debt = st.number_input("Debt Ratio", 0.0, 10.0, 1.0)
-        dependents = st.number_input("Dependents", 0, 10, 1)
+    if late > 2:
+        st.warning("Frequent late payments detected")
 
-    st.markdown("---")
+    if util > 0.7:
+        st.warning("High credit utilization")
 
-    # Prediction
-    if st.button("🚀 Predict Risk"):
-        data = np.array([[age, income, debt, dependents]])
+    if income < 3000:
+        st.warning("Low income may increase risk")
 
-        try:
-            prediction = model.predict(data)
+    if (debt <= 0.6 and late <= 2 and util <= 0.7 and income >= 3000):
+        st.success("Financial profile looks stable")
 
-            if prediction[0] == 1:
-                st.error("⚠️ High Risk of Default")
-            else:
-                st.success("✅ Low Risk Customer")
+    st.write("---")
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+# Footer
+st.markdown("Made with ❤️ using Machine Learning & Streamlit")
